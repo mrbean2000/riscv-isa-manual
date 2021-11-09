@@ -1,4 +1,4 @@
-\chapter{``Smrnmi'' Standard Extension for Resumable Non-Maskable Interrupts, Version 0.1}
+\chapter{``Smrnmi'' Standard Extension for Resumable Non-Maskable Interrupts, Version 0.4}
 \label{chap:rnmi}
 
 The base machine-level architecture supports only
@@ -122,16 +122,24 @@ NMI causes are not supported.
 {\footnotesize
 \begin{center}
 \setlength{\tabcolsep}{4pt}
-\begin{tabular}{MRS}
+\begin{tabular}{TRFcFcF}
 \instbitrange{MXLEN-1}{13} &
 \instbitrange{12}{11} &
-\instbitrange{10}{0} \\
+\instbitrange{10}{8} &
+\instbit{7} &
+\instbitrange{6}{4} &
+\instbit{3} &
+\instbitrange{2}{0} \\
 \hline
 \multicolumn{1}{|c|}{\em Reserved} &
-\multicolumn{1}{c|}{MPP (\warl)} &
+\multicolumn{1}{c|}{MNPP (\warl)} &
+\multicolumn{1}{c|}{\em Reserved} &
+\multicolumn{1}{c|}{MNPV (\warl)} &
+\multicolumn{1}{c|}{\em Reserved} &
+\multicolumn{1}{c|}{NMIE} &
 \multicolumn{1}{c|}{\em Reserved} \\
 \hline
-MXLEN-12 & 2 & 10 \\
+MXLEN-13 & 2 & 3 & 1 & 3 & 1 & 3 \\
 \end{tabular}
 \end{center}
 }
@@ -140,28 +148,36 @@ MXLEN-12 & 2 & 10 \\
 \label{fig:mnstatus}
 \end{figure*}
 
-The {\tt mnstatus} CSR holds a two-bit field which on entry to the trap
-handler holds the privilege mode of the interrupted context encoded in
-bits {\tt mnstatus[12:11]} in the same manner as {\tt mstatus}.MPP.  The other
+The {\tt mnstatus} CSR holds a two-bit field, MNPP, which on entry to the trap
+handler holds the privilege mode of the interrupted context, encoded
+in the same manner as {\tt mstatus}.MPP.
+It also holds a one-bit field, MNPV, which on entry to the trap handler holds
+the virtualization mode of the interrupted context, encoded in the same
+manner as {\tt mstatus}.MPV.
+
+{\tt mnstatus} also holds the NMIE bit.
+When NMIE=1, nonmaskable interrupts are enabled.
+When NMIE=0, {\em all} interrupts are disabled.
+Software can set NMIE to 1, but attempts to clear NMIE have no effect.
+NMIE is reset to 1.
+
+The other
 bits in {\tt mnstatus} are {\em reserved}; software should write zeros and
 hardware implementations should return zeros.
 
 \section{MNRET Instruction}
 
 MNRET is an M-mode-only instruction that uses the values in {\tt mnepc} and
-{\tt mnstatus} to return to the program counter and privileged mode, respectively,
-of the interrupted context.  This instruction also sets the
-{\tt rnmie} state bit.
+{\tt mnstatus} to return to the program counter, privilege mode,
+and virtualization mode of the interrupted context.
+This instruction also sets {\tt mnstatus}.NMIE.
 
 \section{RNMI Operation}
 
 When an RNMI interrupt is detected, the interrupted PC is written to
 the {\tt mnepc} CSR, the type of RNMI to the {\tt mncause} CSR, and the
-privilege mode of the interrupted context to the {\tt mnstatus} CSR.  An
-internal microarchitectural state bit {\tt rnmie} is cleared to indicate
-that processor is in an RNMI handler and cannot take a new RNMI
-interrupt.  The internal {\tt rnmie} bit when clear also disables all
-other interrupts.
+privilege mode of the interrupted context to the {\tt mnstatus} CSR.
+The {\tt mnstatus}.NMIE bit is cleared, masking all interrupts.
 
 \begin{commentary}
 These interrupts are called non-maskable because software cannot
@@ -175,10 +191,10 @@ address.
 
 The RNMI handler can resume original execution using the new MNRET
 instruction, which restores the PC from {\tt mnepc}, the privilege mode
-from {\tt mnstatus}, and also sets the internal {\tt rnmie} state bit, which
-re-enables other interrupts.
+from {\tt mnstatus}, and also sets {\tt mnstatus}.NMIE, which
+re-enables interrupts.
 
-If the hart encounters an exception while the {\tt rnmie} bit is clear, the
+If the hart encounters an exception while {\tt mnstatus}.NMIE bit is clear, the
 exception state is written to {\tt mepc} and {\tt mcause}, {\tt mstatus}.MPP is
 set to M-mode, and the hart jumps to the RNMI exception handler
 address.
